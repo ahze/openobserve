@@ -105,7 +105,7 @@ FROM ghcr.io/daemonless/base-exec:${BASE_VERSION}
 ARG PACKAGES="ca_root_nss liblz4 zstd"
 
 LABEL org.opencontainers.image.title="{{ title }}" \
-      org.opencontainers.image.description={{ description }}" \
+      org.opencontainers.image.description="{{ description }}" \
       org.opencontainers.image.source="{{ repo_url }}" \
       org.opencontainers.image.url="{{ web_url }}"  \
       org.opencontainers.image.licenses="AGPL-3.0" \
