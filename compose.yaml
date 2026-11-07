@@ -1,0 +1,48 @@
+name: openobserve
+
+x-daemonless:
+  title: "OpenObserve"
+  icon: ":material-apps:"  # https://pictogrammers.com/library/mdi/ (material-) or https://simpleicons.org/ (simple-)
+  category: "Monitoring"
+  description: "Open source observability platform for logs, metrics, traces, RUM (web, android, ios), Session replay, pipelines, SLO and LLM observability."
+  upstream_url: "https://github.com/openobserve/openobserve"
+  web_url: "https://openobserve.ai/"
+  user: "bsd"
+  mlock: false
+  upstream_binary: false
+  community: "Discord:https://discord.gg/Kb9tkhecZT"
+
+  docs:
+    env:
+      PUID: "User ID for the application process"
+      PGID: "Group ID for the application process"
+      TZ: "Timezone for the container"
+      ZO_ROOT_USER_EMAIL: "Username of the admin user"
+      ZO_ROOT_USER_PASSWORD: "Password of the admin user"
+    volumes:
+      /data: "Data directory"
+    ports:
+      5080: "Web UI"
+      5081: "Grpc"
+
+services:
+  openobserve:
+    image: ghcr.io/daemonless/openobserve:latest
+    container_name: openobserve
+    # "always", not "unless-stopped": FreeBSD's podman rc.d only auto-starts
+    # containers with restart-policy=always at boot (needs podman_enable=YES).
+    restart: always
+
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=UTC
+      - ZO_ROOT_USER_EMAIL=root@example.com
+      - ZO_ROOT_USER_PASSWORD=Complexpass#123
+
+    volumes:
+      - /path/to/containers/openobserve:/data
+
+    ports:
+      - 5080:5080
+      - 5081:5081

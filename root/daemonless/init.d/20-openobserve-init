@@ -1,0 +1,5 @@
+#!/bin/sh
+# Initialize OpenObserve config
+
+# Ensure directories exist and have correct ownership
+chown -R bsd:bsd /data

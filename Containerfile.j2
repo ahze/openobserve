@@ -1,0 +1,152 @@
+ARG BASE_VERSION=15.1
+ARG UPSTREAM_URL="https://api.github.com/repos/openobserve/openobserve/releases/latest"
+ARG UPSTREAM_JQ=".tag_name"
+ARG TARBALL_JQ=".tarball_url"
+
+FROM ghcr.io/daemonless/node:24 as web
+
+ARG FREEBSD_ARCH=amd64
+ARG APP_VERSION="latest"
+ARG UPSTREAM_URL
+ARG UPSTREAM_JQ
+ARG TARBALL_JQ
+
+RUN fetch -qo /latest.json "${UPSTREAM_URL}" && \
+    echo $(jq -r "${UPSTREAM_JQ}" /latest.json | sed  's/v//') > /version && \
+    echo $(jq -r "${TARBALL_JQ}" /latest.json) > /tarball_url
+
+# Install required tools
+RUN pkg update && pkg install -y git && \
+    pkg clean -ay && \
+    rm -rf /var/cache/pkg/* /var/db/pkg/repos/*
+
+# Fetch and extract source tarball
+RUN fetch -qo /tmp/openobserve.tar.gz "$(cat /tarball_url)" && \
+    mkdir -m 0755 /openobserve && \
+    tar -C /openobserve -xzf /tmp/openobserve.tar.gz --strip-components 1
+
+WORKDIR /openobserve/web
+
+RUN npm ci --no-audit --no-fund || npm install --no-audit --no-fund
+RUN NODE_OPTIONS="--max-old-space-size=8192" npm run build
+
+
+FROM ghcr.io/daemonless/base:${BASE_VERSION} AS builder
+
+ENV CARGO_TERM_COLOR=never \
+    RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/usr/local/cargo \
+    PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin
+
+COPY --from=web /tmp/openobserve.tar.gz /tmp/openobserve.tar.gz
+
+# Fetch and extract source tarball
+RUN mkdir -m 0755 /openobserve && \
+    tar -C /openobserve -xzf /tmp/openobserve.tar.gz --strip-components 1
+
+# Install required tools
+RUN pkg update && pkg install -y FreeBSD-set-devel rustup-init git cmake gmake pkgconf protobuf openssl ca_root_nss \
+      liblz4 zstd llvm19 && \
+    pkg clean -ay && \
+    rm -rf /var/cache/pkg/* /var/db/pkg/repos/*
+
+# nightly is pinned by openobserve's rust-toolchain.toml
+RUN rustup-init -y --no-modify-path --profile minimal --default-toolchain none && \
+ rustup toolchain install nightly-2026-10-24 --profile minimal
+
+WORKDIR /openobserve
+
+COPY --from=web /openobserve/web/dist web/dist
+
+# --- enable rquickjs-sys/bindgen (no FreeBSD bindings are shipped) ---
+RUN <<CMD_EOF
+set -eu
+if ! grep -q 'rquickjs.*bindgen' Cargo.toml; then
+    awk '
+    /^[[:space:]]*rquickjs[[:space:]]*=/ && !done {
+        if ($0 ~ /features[[:space:]]*=[[:space:]]*\[/) {
+        sub(/\]/, ", \"bindgen\"]")
+        } else {
+        sub(/}[[:space:]]*$/, ", features = [\"bindgen\"] }")
+        }
+        done = 1
+    }
+    { print }
+    END { exit(done ? 0 : 1) }
+    ' Cargo.toml > Cargo.toml.new
+    mv Cargo.toml.new Cargo.toml
+fi
+grep -n 'rquickjs' Cargo.toml
+CMD_EOF
+
+COPY --from=web /version /tmp/version
+
+# OpenObserve takes its version number from the git tag
+# As we are building from a tarball and not from a git checkout, we create a
+# minimal git repo and tag it with the version of the tarball
+RUN <<CMD_EOF
+git config --global init.defaultBranch main
+git config --global user.email "you@example.com"
+git init
+git add Cargo.toml
+git commit -m 'minimal commit'
+git tag $(cat /tmp/version)
+CMD_EOF
+
+# protoc >= 3.15 is required by the build [1]
+RUN <<CMD_EOF
+RUSTFLAGS="-C target-feature=+aes,+sse2" cargo build --release --bin openobserve
+rm -fr target/debug target/release/build ~/.cargo/registry/src ~/.cargo/git/checkouts
+CMD_EOF
+
+
+FROM ghcr.io/daemonless/base-exec:${BASE_VERSION}
+
+ARG PACKAGES="ca_root_nss liblz4 zstd"
+
+LABEL org.opencontainers.image.title="{{ title }}" \
+      org.opencontainers.image.description={{ description }}" \
+      org.opencontainers.image.source="{{ repo_url }}" \
+      org.opencontainers.image.url="{{ web_url }}"  \
+      org.opencontainers.image.licenses="AGPL-3.0" \
+      org.opencontainers.image.vendor="daemonless" \
+      org.opencontainers.image.authors="daemonless" \
+      io.daemonless.category="{{ category }}" \
+      io.daemonless.port="{{ ports[0].port }}" \
+      io.daemonless.volumes="{{ volumes | map(attribute='path') | join(',') }}" \
+      io.daemonless.arch="${FREEBSD_ARCH}" \
+      io.daemonless.packages="${PACKAGES}" \
+      io.daemonless.upstream-url="${UPSTREAM_URL}" \
+      io.daemonless.upstream-jq="${UPSTREAM_JQ}"
+
+
+# Install dependencies
+RUN pkg update && \
+    pkg install -y ${PACKAGES} && \
+    pkg clean -ay && \
+    rm -rf /var/cache/pkg/* /var/db/pkg/repos/*
+
+ENV ZO_DATA_DIR=/data
+
+RUN mkdir -m 0755 /app
+
+COPY --from=builder /openobserve/target/release/openobserve /app/openobserve
+COPY --from=builder /tmp/version /app/version
+
+# Copy root filesystem
+COPY root/ /
+
+# Set permissions
+RUN chmod +x /daemonless/libexec/openobserve /daemonless/init.d/* /healthz
+
+CMD ["/daemonless/libexec/openobserve"]
+
+# --- Expose (Injected by Generator) ---
+{%- if ports %}
+EXPOSE {{ ports | map(attribute='target') | join(' ') }}
+{%- endif %}
+
+# --- Volumes (Injected by Generator) ---
+{%- if volumes %}
+VOLUME {{ volumes | map(attribute='path') | join(' ') }}
+{%- endif %}
