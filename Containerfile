@@ -111,7 +111,7 @@ FROM ghcr.io/daemonless/base-exec:${BASE_VERSION}
 ARG PACKAGES="ca_root_nss liblz4 zstd"
 
 LABEL org.opencontainers.image.title="OpenObserve" \
-      org.opencontainers.image.description=Open source observability platform for logs, metrics, traces, RUM (web, android, ios), Session replay, pipelines, SLO and LLM observability." \
+      org.opencontainers.image.description="Open source observability platform for logs, metrics, traces, RUM (web, android, ios), Session replay, pipelines, SLO and LLM observability." \
       org.opencontainers.image.source="https://github.com/daemonless/openobserve" \
       org.opencontainers.image.url="https://openobserve.ai/"  \
       org.opencontainers.image.licenses="AGPL-3.0" \
