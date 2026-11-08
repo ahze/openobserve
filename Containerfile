@@ -44,7 +44,8 @@ ENV CARGO_TERM_COLOR=never \
     CARGO_HOME=/usr/local/cargo \
     PATH=/usr/local/cargo/bin:/usr/local/bin:/usr/bin:/usr/sbin:/bin:/sbin \
     CARGO_PROFILE_RELEASE_DEBUG=0 \
-    CARGO_INCREMENTAL=0
+    CARGO_INCREMENTAL=0 \
+    CARGO_BUILD_JOBS=2
 
 COPY --from=web /tmp/openobserve.tar.gz /tmp/openobserve.tar.gz
 
