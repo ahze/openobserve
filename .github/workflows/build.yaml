@@ -16,7 +16,9 @@ permissions:
 
 jobs:
   build:
-    uses: daemonless/dbuild/.github/workflows/daemonless-build.yaml@main
+    uses: daemonless/dbuild/.github/workflows/daemonless-build.yaml@feat/vm-mem-runner-swap
     with:
       image_name: openobserve
+      vm_mem: 40960      # web crate: one rustc peaks above 22 GB
+      host_swap_gb: 40
     secrets: inherit
