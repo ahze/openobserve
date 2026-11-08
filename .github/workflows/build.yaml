@@ -16,7 +16,7 @@ permissions:
 
 jobs:
   build:
-    uses: daemonless/dbuild/.github/workflows/daemonless-build.yaml@main
+    uses: daemonless/dbuild/.github/workflows/daemonless-build.yaml@feat/one-time-vnc-password
     with:
       image_name: openobserve
     secrets: inherit
